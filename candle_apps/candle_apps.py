@@ -129,6 +129,7 @@ def run_intranode(smiles, pkl_models):
     import parsl
     from parsl.configs.htex_local import config
     config.executors[0].label = "theta_intranode"
+    config.run_dir = "theta_intranode"
     parsl.load(config)
 
     models_to_test = pickle.loads(pkl_models)
