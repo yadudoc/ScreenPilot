@@ -18,17 +18,24 @@ def compute_descript(smile, walltime=1):
     import numpy as np
     import pickle
 
-    calc = Calculator(descriptors, ignore_3D=True) # this object doesn't need to be created everytime. Can make global I think?
+    # calc = Calculator(descriptors, ignore_3D=True) # this object doesn't need to be created everytime. Can make global I think?
+    # ignore_3D set to false, - Xuefeng
+    calc = Calculator(descriptors, ignore_3D=False) # this object doesn't need to be created everytime. Can make global I think?
 
     #read smiles
     mol = Chem.MolFromSmiles(smile)
-    if mol is None:
+
+    if mol is None or len(mol.GetAtoms()) > 100:
         print("Error processing mol")
         return pickle.dumps(None)
 
     descs = calc(mol)
 
+    # Mods from Xuefeng
+    descs.fill_missing("nan")
+
     data = np.array(descs).flatten().astype(np.float32) #could run in FP16 UNO , something to think about
+    # data = descs
     # return pickle.dumps(data) # We do this to avoid a bug in the serialization routines that Parsl
     return data
 
@@ -63,6 +70,8 @@ def run_local(smiles, index_start, index_end, out_file=None):
 
     descripts = {}
 
+    # return len(smiles)
+
     if out_file:
         parent = os.path.dirname(out_file)
         try:
@@ -73,24 +82,42 @@ def run_local(smiles, index_start, index_end, out_file=None):
         parent = "."
     logger= set_file_logger(f'{parent}.{index_start}-{index_end}.log')
 
-    start = time.time()
-    logger.info("Starting")
-    with Pool(os.cpu_count()) as p:
-        for s, descript in zip(smiles,  p.map(compute_descript, smiles)):
-            descripts[s] = descript
+    try:
+        start = time.time()
+        logger.info("Starting")
+        with Pool(os.cpu_count()) as p:
+            logger.info("Created pool: {}".format(p))
+            launched = p.map(compute_descript, smiles)
+            print(launched)
+            print(list(launched))
+            for index, s in enumerate(smiles):
+                cleaned_s, *drug_id = s.strip().split()
+                descripts[cleaned_s] = (drug_id, launched[index])
+            
+            #for s, descript in zip(smiles,  p.map(compute_descript, smiles)):
+            #   logger.debug("Got descript for {}".format(s))
+            #   descripts[s] = descript
+    except Exception as e:
+        logger.exception("Caught error during compute")
+        raise
+
+    delta = time.time() - start
+    logger.info("Completed {} in {}s. Throughput: {} Smiles/s".format(len(smiles), delta, len(smiles)/delta))
 
     with open(out_file, 'wb') as f:
         pickle.dump(descripts, f)
 
-    delta = time.time() - start
-    logger.info("Completed {} in {}s. Throughput: {} Smiles/s".format(len(smiles), delta, len(smiles)/delta))
     logger.info(f"Wrote output to {out_file}")
-    return descripts
+    return out_file
 
 
 if __name__ == "__main__":
 
     import pandas as pd
     print("[Main] Loading all data available")
-    smiles = pd.read_csv("train.csv", nrows=100).iloc[:,0].tolist()
-    run_local(smiles, 0, 100, "outputs/outputs-0-100.pkl")
+    # smiles = pd.read_csv("train.csv", nrows=1000).iloc[:,0].tolist()
+    # smiles = pd.read_csv("drugbank-all.smi", nrows=10000, error_bad_lines=False)
+    count = 100
+    with open("drugbank-all.smi") as f:
+        smiles = f.readlines()[:count]
+    run_local(smiles, 0, count, f"outputs/outputs-0-{count}.pkl")
