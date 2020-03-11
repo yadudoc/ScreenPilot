@@ -4,6 +4,7 @@ import pickle
 from multiprocessing import Pool, TimeoutError
 import time
 import os
+import sys
 import logging
 
 def compute_descript(smile, walltime=1):
@@ -81,15 +82,14 @@ def run_local(smiles, index_start, index_end, out_file=None):
     else:
         parent = "."
     logger= set_file_logger(f'{parent}.{index_start}-{index_end}.log')
+    logger.info("Running with python: {}".format(sys.version))
 
     try:
         start = time.time()
         logger.info("Starting")
         with Pool(os.cpu_count()) as p:
-            logger.info("Created pool: {}".format(p))
+            logger.info("Created pool with {0} processes for {0} cores".format(os.cpu_count()))
             launched = p.map(compute_descript, smiles)
-            print(launched)
-            print(list(launched))
             for index, s in enumerate(smiles):
                 cleaned_s, *drug_id = s.strip().split()
                 descripts[cleaned_s] = (drug_id, launched[index])
@@ -117,7 +117,7 @@ if __name__ == "__main__":
     print("[Main] Loading all data available")
     # smiles = pd.read_csv("train.csv", nrows=1000).iloc[:,0].tolist()
     # smiles = pd.read_csv("drugbank-all.smi", nrows=10000, error_bad_lines=False)
-    count = 100
-    with open("drugbank-all.smi") as f:
+    count = 3000
+    with open("ena+db.can") as f:
         smiles = f.readlines()[:count]
     run_local(smiles, 0, count, f"outputs/outputs-0-{count}.pkl")
