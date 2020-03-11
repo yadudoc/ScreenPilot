@@ -15,6 +15,7 @@ Installing parsl on Theta
 -------------------------
 
 On most systems install parsl via pip works::
+
     pip install parsl
 
 However on some machines, like Theta, the pip module for `psutil` simply won't install properly.
@@ -28,14 +29,17 @@ Running the workflow
 --------------------
 
 To run on theta, try::
+
      python3 test.py --num_smiles 10000 --batch_size 1000 -config theta
 
 Note::
+
   Expect the command to take a while to start running since loading the whole mass of python libs necessary from
   the shared-fs will be slow. But, once loaded, it should fly
 
 
 Usage::
+
     usage: test.py [-h] [-v VERSION] [-d] [-n NUM_SMILES] [-s SMILE_FILE]
     [-b BATCH_SIZE] [-c CONFIG]
 
