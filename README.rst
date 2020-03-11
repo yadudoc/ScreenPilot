@@ -11,6 +11,11 @@ Installation
     conda install -c rdkit -c mordred-descriptor mordred
     conda install scikit-learn pandas keras
 
+* Then install the ScreenPilot scripts::
+
+    python setup.py install
+
+
 Installing parsl on Theta
 -------------------------
 
