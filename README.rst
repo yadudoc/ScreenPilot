@@ -2,10 +2,12 @@ Installation
 ------------
 
 
-* Set up a conda env ::
+* Set up a conda env::
+
     conda create --name candle python=3.7
 
-* Install requirements ::
+* Install requirements::
+
     conda install -c rdkit -c mordred-descriptor mordred
     conda install scikit-learn pandas keras
 
@@ -17,6 +19,7 @@ On most systems install parsl via pip works::
 
 However on some machines, like Theta, the pip module for `psutil` simply won't install properly.
 In this situation, it's easier to install the `psutil` module from conda and then do the parsl install::
+
     conda install psutil
     pip install parsl
 
