@@ -7,7 +7,7 @@ import os
 import sys
 import logging
 
-def compute_descript(smile, walltime=1):
+def compute_descript(smile, walltime=30, pickle=False):
     """
     import random
     import time
@@ -37,8 +37,10 @@ def compute_descript(smile, walltime=1):
 
     data = np.array(descs).flatten().astype(np.float32) #could run in FP16 UNO , something to think about
     # data = descs
-    # return pickle.dumps(data) # We do this to avoid a bug in the serialization routines that Parsl
-    return data
+    if pickle:
+        return pickle.dumps(data) # We do this to avoid a bug in the serialization routines that Parsl
+    else:
+        return data
 
 
 def set_file_logger(filename: str, name: str = 'candle', level: int = logging.DEBUG, format_string = None):
@@ -67,7 +69,7 @@ def set_file_logger(filename: str, name: str = 'candle', level: int = logging.DE
 
 
 
-def run_local(smiles, index_start, index_end, out_file=None):
+def run_local(smiles, index_start, index_end, timeout=30*60, out_file=None):
 
     descripts = {}
 
