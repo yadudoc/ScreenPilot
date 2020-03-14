@@ -7,6 +7,25 @@ import argparse
 import parsl
 import pickle
 
+def generate_batch(filename, start=0, batchsize=10, max_batches=10):
+
+    counter = 0
+    if max_batches == 0:
+        max_batches = 999999999
+
+    x = 'Hello'
+    with open(filename) as current:
+        yield current.tell()
+        counter += 1
+
+        while x and counter < max_batches:
+            counter += 1
+            for i in range(batchsize):
+                x = current.readline()
+
+            yield current.tell()
+        return
+
 
 
 if __name__ == "__main__":
@@ -16,8 +35,8 @@ if __name__ == "__main__":
                         help="Print Endpoint version information")
     parser.add_argument("-d", "--debug", action='store_true',
                         help="Enables debug logging")
-    parser.add_argument("-n", "--num_smiles", default=8,
-                        help="Number of smiles to load and run. Default=10000, if set to 0 the entire file will be used")
+    parser.add_argument("-n", "--num_batches", default=8,
+                        help="Number of batches to load and run. Default=8, if set to 0 the entire file will be used")
     parser.add_argument("-s", "--smile_file", default="train.csv",
                         help="File path to the smiles csv file")
     parser.add_argument("-b", "--batch_size", default="4",
@@ -57,13 +76,17 @@ if __name__ == "__main__":
     else:
         print(f"[Main] Loading {args.num_smiles} smiles from file")
         smiles = pd.read_csv(args.smile_file,  error_bad_lines=False, nrows=int(args.num_smiles)) # .iloc[:,0].tolist()
-    """
+
 
     with open(args.smile_file) as f:
         if int(args.num_smiles) > 0:
             smiles = f.readlines()[:int(args.num_smiles)]
         else:
             smiles = f.readlines()
+    """
+    batch_generator = generate_batch(args.smile_file, start=0,
+                                     batchsize=int(args.batch_size),
+                                     max_batches=int(args.num_batches))
 
     try:
         os.makedirs(args.outdir)
@@ -75,13 +98,18 @@ if __name__ == "__main__":
     chunksize = int(args.batch_size)
     print(f"[Main] Chunksize : {chunksize}")
     batch_futures = {}
-    for i in range(0, len(smiles), chunksize):
+
+    i = 0
+    for batch_index in batch_generator:
+    # for i in range(0, len(smiles), chunksize):
         #result_chunks = run_intranode(smiles[i:i+chunksize],
         #                              pickle.dumps(models_to_test))
-        result_chunks = parsl_runner(smiles[i:i+chunksize],
+        result_chunks = parsl_runner(args.smile_file, # smiles[i:i+chunksize],
                                      i, i+chunksize,
+                                     batch_index, int(args.batch_size),
                                      out_file=f"{args.outdir}/{args.smile_file}.chunk-{i}-{i+chunksize}.pkl")
         batch_futures[(i,i+chunksize)] = result_chunks
+        i += chunksize
 
     print("[Main] Waiting for {} futures...".format(len(batch_futures)))
     for i in batch_futures:

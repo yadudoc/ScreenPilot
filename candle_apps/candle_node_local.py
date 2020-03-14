@@ -69,8 +69,16 @@ def set_file_logger(filename: str, name: str = 'candle', level: int = logging.DE
 
 
 
-def run_local(smiles, index_start, index_end, timeout=30*60, out_file=None):
 
+def run_local(smile_file, index_start, index_end, index, batchsize, timeout=30*60, out_file=None):
+
+    smiles = []
+
+    with open(smile_file) as current:
+        current.seek(index)
+        smiles = [current.readline() for i in range(batchsize)]
+
+    #smiles = get_batch(smile_file, index=index, batchsize=batchsize)
     descripts = {}
 
     # return len(smiles)
@@ -95,7 +103,7 @@ def run_local(smiles, index_start, index_end, timeout=30*60, out_file=None):
             for index, s in enumerate(smiles):
                 cleaned_s, *drug_id = s.strip().split()
                 descripts[cleaned_s] = (drug_id, launched[index])
-            
+
             #for s, descript in zip(smiles,  p.map(compute_descript, smiles)):
             #   logger.debug("Got descript for {}".format(s))
             #   descripts[s] = descript
