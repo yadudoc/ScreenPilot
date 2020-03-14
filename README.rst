@@ -3,11 +3,15 @@ Installation
 
 
 * Set up a conda env ::
-    conda create --name candle python=3.7
+    conda create --name candle_py3.7 python=3.7
 
 * Install requirements ::
     conda install -c rdkit -c mordred-descriptor mordred
-    conda install scikit-learn pandas keras
+    conda install psutil
+* Install parsl from master:
+   
+    pip install git+https://github.com/Parsl/parsl.git
+    
 
 Installing parsl on Theta
 -------------------------
@@ -25,7 +29,11 @@ Running the workflow
 --------------------
 
 To run on theta, try::
-     python3 test.py --num_smiles 10000 --batch_size 1000 -config theta
+     python3 test.py --num_smiles 10000 --batch_size 1000 -c theta -s <SMILE_FILE> -i <SMILE_OUTPUT_DIR>
+
+For eg::
+
+     python3 test.py -s 2019q3-4_Enamine_REAL_02.smi -b 10000 -n 0 -o 2019q3-4_Enamine_REAL_02_descriptors -c theta
 
 Note::
   Expect the command to take a while to start running since loading the whole mass of python libs necessary from
