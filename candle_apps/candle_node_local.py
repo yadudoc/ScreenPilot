@@ -4,24 +4,21 @@ import pickle
 from multiprocessing import Pool, TimeoutError
 import time
 import os
+import shutil
 import sys
 import logging
+import pybel
+from mordred import Calculator, descriptors
+from rdkit import Chem
+import numpy as np
+import pickle
+
+
+calc = Calculator(descriptors, ignore_3D=False) # this object doesn't need to be created everytime. Can make global I think?
 
 def compute_descript(smile, walltime=1):
-    """
-    import random
-    import time
-    if random.randint(0,8) == 0:
-        time.sleep(1)
-    """
-    from mordred import Calculator, descriptors
-    from rdkit import Chem
-    import numpy as np
-    import pickle
-
     # calc = Calculator(descriptors, ignore_3D=True) # this object doesn't need to be created everytime. Can make global I think?
     # ignore_3D set to false, - Xuefeng
-    calc = Calculator(descriptors, ignore_3D=False) # this object doesn't need to be created everytime. Can make global I think?
 
     #read smiles
     mol = Chem.MolFromSmiles(smile)
@@ -67,22 +64,24 @@ def set_file_logger(filename: str, name: str = 'candle', level: int = logging.DE
 
 
 
-def run_local(smiles, index_start, index_end, out_file=None):
+def run_local(smiles, index_start, index_end, out_file=None, logger=None):
 
     descripts = {}
 
     # return len(smiles)
 
-    if out_file:
-        parent = os.path.dirname(out_file)
-        try:
-            os.makedirs(parent)
-        except:
-            pass
-    else:
-        parent = "."
-    logger= set_file_logger(f'{parent}.{index_start}-{index_end}.log')
-    logger.info("Running with python: {}".format(sys.version))
+    if logger is None:
+        if out_file:
+            parent = os.path.dirname(out_file)
+            try:
+                os.makedirs(parent)
+            except:
+                pass
+        else:
+            parent = "."
+
+        logger= set_file_logger(f'{parent}.{index_start}-{index_end}.log')
+        logger.info("Running with python: {}".format(sys.version))
 
     try:
         start = time.time()
@@ -93,7 +92,7 @@ def run_local(smiles, index_start, index_end, out_file=None):
             for index, s in enumerate(smiles):
                 cleaned_s, *drug_id = s.strip().split()
                 descripts[cleaned_s] = (drug_id, launched[index])
-            
+
             #for s, descript in zip(smiles,  p.map(compute_descript, smiles)):
             #   logger.debug("Got descript for {}".format(s))
             #   descripts[s] = descript
@@ -108,6 +107,55 @@ def run_local(smiles, index_start, index_end, out_file=None):
         pickle.dump(descripts, f)
 
     logger.info(f"Wrote output to {out_file}")
+    logger.handlers.pop()
+    return out_file
+
+
+def funcx_node_local(filename, index, batchsize, index_start, index_end,
+                     out_file=None, workdir=None):
+
+    if workdir is None:
+        workdir = os.environ['WORKDIR']
+    os.makedirs(workdir, exist_ok=True)
+
+
+    logger= set_file_logger(f'{workdir}/test.log')
+    logger.info("------------------------------")
+    logger.info("Running with python: {}".format(sys.version))
+    logger.info("Workdir: {}".format(workdir))
+
+    basename = os.path.basename(filename)
+    real_local_path = os.path.expandvars(f'/tmp/$USER/{basename}')
+
+    os.makedirs(os.path.expandvars(f'/tmp/$USER'), exist_ok=True)
+    logger.info(f"Real_local_path : {real_local_path}")
+
+    if os.path.exists(real_local_path):
+        logger.info(f"Source data file exists at {real_local_path}")
+        pass
+    elif os.path.exists(filename):
+        logger.info(f"Source file is at {filename}, copying to {real_local_path}")
+        shutil.copyfile(filename, real_local_path)
+    elif os.path.exists(f"{workdir}/{filename}"):
+        logger.info(f"Source file is at {workdir}/{filename}, copying to {real_local_path}")
+        shutil.copyfile(f"{workdir}/{filename}", real_local_path)
+    else:
+        logger.error(f"File {filename} was not found as-is, or in workdir:{workdir}/{filename} or {real_local_path}")
+        raise Exception(f"File {filename} was not found as-is, or in workdir:{workdir}/{filename} or {real_local_path}")
+
+
+    with open(real_local_path) as current:
+        logger.info(f"Begin Reading {batchsize} items from index:{index}")
+        current.seek(index)
+        smiles = [current.readline() for i in range(batchsize)]
+        logger.info("Smiles loaded")
+
+    out_file = run_local(smiles,
+                         index_start,
+                         index_end,
+                         out_file=out_file,
+                         logger=logger)
+
     return out_file
 
 

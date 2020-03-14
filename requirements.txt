@@ -1,5 +1,6 @@
 pandas
 parsl>=0.9.0
-scikit-learn
-keras
+pybel
+# scikit-learn
+# keras
 
