@@ -110,6 +110,7 @@ def run_local(smiles, index_start, index_end, timeout=30*60, out_file=None):
         pickle.dump(descripts, f)
 
     logger.info(f"Wrote output to {out_file}")
+    logger.handlers.pop()
     return out_file
 
 
