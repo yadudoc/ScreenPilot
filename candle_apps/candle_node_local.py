@@ -105,6 +105,7 @@ def run_local(smiles, index_start, index_end, out_file=None, logger=None):
 
     with open(out_file, 'wb') as f:
         pickle.dump(descripts, f)
+
     logger.info(f"Wrote output to {out_file}")
     logger.handlers.pop()
     return out_file
@@ -145,7 +146,8 @@ def funcx_node_local(filename, index, batchsize, index_start, index_end,
 
     with open(real_local_path) as current:
         logger.info(f"Begin Reading {batchsize} items from index:{index}")
-        smiles = current.readlines()[index:index+batchsize]
+        current.seek(index)
+        smiles = [current.readline() for i in range(batchsize)]
         logger.info("Smiles loaded")
 
     out_file = run_local(smiles,
