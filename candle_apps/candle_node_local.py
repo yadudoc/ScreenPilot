@@ -37,11 +37,13 @@ def compute_descript(smile, walltime=30, pickle=False):
 
     data = np.array(descs).flatten().astype(np.float32) #could run in FP16 UNO , something to think about
     # data = descs
+    """
     if pickle:
         return pickle.dumps(data) # We do this to avoid a bug in the serialization routines that Parsl
     else:
         return data
-
+    """
+    return data
 
 def set_file_logger(filename: str, name: str = 'candle', level: int = logging.DEBUG, format_string = None):
     """Add a stream log handler.
@@ -91,7 +93,9 @@ def run_local(smile_file, index_start, index_end, index, batchsize, timeout=30*6
             pass
     else:
         parent = "."
-    logger= set_file_logger(f'{parent}.{index_start}-{index_end}.log')
+
+    os.makedirs(f'{parent}_logs', exist_ok=True)
+    logger= set_file_logger(f'{parent}_logs/{index_start}-{index_end}.log')
     logger.info("Running with python: {}".format(sys.version))
 
     try:
