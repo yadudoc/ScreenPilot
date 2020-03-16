@@ -7,7 +7,7 @@ import os
 import sys
 import logging
 
-def compute_descript(smile, walltime=30, pickle=False):
+def compute_descript(smile, walltime=30, pickle_output=False):
     """
     import random
     import time
@@ -17,7 +17,6 @@ def compute_descript(smile, walltime=30, pickle=False):
     from mordred import Calculator, descriptors
     from rdkit import Chem
     import numpy as np
-    import pickle
 
     # calc = Calculator(descriptors, ignore_3D=True) # this object doesn't need to be created everytime. Can make global I think?
     # ignore_3D set to false, - Xuefeng
@@ -37,13 +36,12 @@ def compute_descript(smile, walltime=30, pickle=False):
 
     data = np.array(descs).flatten().astype(np.float32) #could run in FP16 UNO , something to think about
     # data = descs
-    """
-    if pickle:
+
+    if pickle_output is True:
+        import pickle
         return pickle.dumps(data) # We do this to avoid a bug in the serialization routines that Parsl
     else:
         return data
-    """
-    return data
 
 def set_file_logger(filename: str, name: str = 'candle', level: int = logging.DEBUG, format_string = None):
     """Add a stream log handler.
