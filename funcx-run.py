@@ -25,6 +25,14 @@ def generate_batch(filename, start=0, batchsize=10, max_batches=10):
         return batch_index
 
 
+def warm_endpoint(sleep_time=10):
+    """A funcX function to warm the endpoint
+    and create workers"""
+    import time
+    time.sleep(sleep_time)
+    return 1
+
+
 def funcx_runner(index,
                  filename,
                  batchsize, 
@@ -70,7 +78,32 @@ def submit_job(endpoint_uuid,
     return res
 
 
-def do_work(batch_index, batchsize, func_uuid, endpoints, out_file_name):
+def warm_ep(endpoint_uuid, stats, funcx_warm):
+    """Check if current workers < max workers.
+    If so, launch warming tasks.
+
+    Note: this assumes one worker per block.
+    """
+    cur_nodes = stats[endpoint_uuid]['managers']
+    max_nodes = stats[endpoint_uuid]['max_blocks']
+    outstanding_tasks = stats[endpoint_uuid]['outstanding_tasks']['RAW']
+
+    warming_jobs = outstanding_tasks - cur_nodes
+    # Deal with the case of no outstanding tasks
+    if outstanding_tasks == 0:
+        warming_jobs = 0
+    to_warm = max_nodes - (cur_nodes + warming_jobs)
+
+    print(f'max: {max_nodes}, cur: {cur_nodes}, warming: {warming_jobs}, to_warm {to_warm}')
+    if to_warm > 0:
+        for x in range(0, to_warm):
+            print(f"Sending warming function to {endpoint_uuid}")
+            res1 = fxc.run(sleep_time=10,
+                           endpoint_id=endpoint_uuid,
+                           function_id=funcx_warm)
+
+
+def do_work(batch_index, batchsize, func_uuid, funcx_warm, endpoints, out_file_name):
     task_ids = {}
     cur = 0
     while len(batch_index) > 0:
@@ -93,7 +126,9 @@ def do_work(batch_index, batchsize, func_uuid, endpoints, out_file_name):
                 except IndexError as e:
                     print('Finished distributing tasks to endpoints!')
                     return task_ids
-        time.sleep(1)
+            # now try warming the rest of the nodes
+            warm_ep(ep, stats, funcx_warm)
+        time.sleep(60)
     return task_ids
 
 
@@ -122,7 +157,10 @@ if __name__ == "__main__":
                                                         'out_path': '/tmp/'},
                '67e95158-8bda-4b1f-a0ef-31a1626eba00': {'filename': '/home/rchard/src/covid19/ScreenPilot/ena+db.can',
                                                         'workdir': '/tmp/rchard/',
-                                                        'out_path': '/home/rchard/src/covid19/ScreenPilot/'}
+                                                        'out_path': '/home/rchard/src/covid19/ScreenPilot/'},
+               'a59434ad-9a25-4378-9682-b5110e4eaa48': {'filename': '/home/rchard/src/covid19/ScreenPilot/ena+db.can',
+                                                        'workdir': '/tmp/rchard/',
+                                                        'out_path': '/home/rchard/src/covid19/ScreenPilot/'},
               }
 
     # Batch generator
@@ -135,9 +173,10 @@ if __name__ == "__main__":
 
     # Get endpoints
     endpoints = args.endpoints.split(",")
-    endpoints = ['709118de-1103-463f-8425-281eb93b55ff',   #Theta covid19
-                 '67e95158-8bda-4b1f-a0ef-31a1626eba00',   #Ryan ep
-                ]
+    endpoints = ['709118de-1103-463f-8425-281eb93b55ff',  # Theta covid19
+                 '67e95158-8bda-4b1f-a0ef-31a1626eba00',  # Ryan ep
+                 'a59434ad-9a25-4378-9682-b5110e4eaa48',  # Ryan ep Theta queue (5 nodes)
+                 ]
     print(f"Submitting tasks to endpoints {endpoints}")
 
     # Register funcx function
@@ -146,9 +185,11 @@ if __name__ == "__main__":
     print(fxc.base_url, fxc.throttling_enabled)
     funcx_runner_uuid = fxc.register_function(funcx_runner, description="A funcx function for covid19")
 
+    funcx_warm_uuid = fxc.register_function(warm_endpoint,
+                                            description="A funcx warming function for covid19")
     
     # Submit tasks
-    task_ids = do_work(batch_generator, batchsize, funcx_runner_uuid, endpoints, args.smile_file)
+    task_ids = do_work(batch_generator, batchsize, funcx_runner_uuid, funcx_warm_uuid, endpoints, args.smile_file)
 
     ids = list(task_ids.keys())
     pending_tasks = set(ids)
