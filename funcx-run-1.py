@@ -8,6 +8,31 @@ import os
 import logging
 
 
+logger = logging.getLogger('funcx_logger')
+
+
+def set_file_logger(filename, name='pipeline', level=logging.DEBUG, format_string=None):
+    """Add a stream log handler.
+    Args:
+        - filename (string): Name of the file to write logs to
+        - name (string): Logger name
+        - level (logging.LEVEL): Set the logging level.
+        - format_string (string): Set the format string
+    Returns:
+       -  None
+    """
+    if format_string is None:
+        format_string = "%(asctime)s.%(msecs)03d %(name)s:%(lineno)d [%(levelname)s]  %(message)s"
+
+    # logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    handler = logging.FileHandler(filename)
+    handler.setLevel(level)
+    formatter = logging.Formatter(format_string, datefmt='%Y-%m-%d %H:%M:%S')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+
 def generate_batch(filename, start=0, batchsize=10, max_batches=10):
     counter = 0
     if max_batches == 0:
@@ -45,6 +70,7 @@ def funcx_runner(index,
                  out_file=None):
 
     """funcX function to perform work"""
+    return 1/0
     from candle_apps.candle_node_local import funcx_node_local
     return funcx_node_local(filename, index, batchsize, index_start, index_end,
                             workdir=workdir, out_file=out_file)
@@ -113,10 +139,11 @@ def warm_ep(endpoint_uuid, stats, funcx_warm, warm_limit=10):
     to_warm = max_nodes - (cur_nodes + warming_jobs)
     to_warm = min(to_warm, warm_limit)
 
-    print(f'max: {max_nodes}, cur: {cur_nodes}, warming: {warming_jobs}, to_warm {to_warm}')
+    logger.debug(f'max: {max_nodes}, cur: {cur_nodes}, warming: {warming_jobs}, to_warm {to_warm}')
     if to_warm > 0:
+        logger.debug(f'Sending {to_warm} warming function to {endpoint_uuid}')
         for x in range(0, to_warm):
-            print(f"Sending warming function to {endpoint_uuid}")
+            # logger.debug(f"Sending warming function to {endpoint_uuid}")
             res1 = fxc.run(sleep_time=10,
                            endpoint_id=endpoint_uuid,
                            function_id=funcx_warm)
@@ -132,10 +159,10 @@ def do_work(batch_index, done_batch, batchsize, func_uuid, funcx_warm, endpoints
                 try:
                     idx = batch_index.pop(0)
                     if cur in done_batch:
-                        print(f'Batch {cur} is done before, skipping')
+                        logger.debug(f'Batch {cur} is done before, skipping')
                         cur += batchsize
                         continue
-                    print(f'submitting {idx} to {ep}')
+                    logger.debug(f'submitting {idx} to {ep}')
                     task_id = submit_job(ep,
                                          func_uuid,
                                          batchsize,
@@ -144,14 +171,15 @@ def do_work(batch_index, done_batch, batchsize, func_uuid, funcx_warm, endpoints
                                          cur+batchsize,
                                          out_file_name
                                          )
-                    task_ids[task_id] = idx
+                    task_ids[task_id] = cur
                     cur += batchsize
                 except IndexError as e:
-                    print('Finished distributing tasks to endpoints!')
+                    logger.info('Finished distributing tasks to endpoints!')
                     return task_ids
             # now try warming the rest of the nodes
             warm_ep(ep, stats, funcx_warm, warm_limit=min(10, len(batch_index)))
-        time.sleep(70)
+        logger.debug("Sleeping until next scheduler round")
+        time.sleep(10)
     return task_ids
 
 
@@ -162,10 +190,10 @@ def poll_result(task_id, name='funcx function'):
             break
         except Exception as e:
             if 'pending' in str(e):
-                print(f"Waiting for {name}")
+                logger.debug(f"Waiting for {name}")
             else:
-                print(str(e))
-                sys.exit(1)
+                logger.exception(f"Got exception while polling results for {name}")
+                raise e
             time.sleep(5)
             pass
     return res
@@ -188,8 +216,13 @@ if __name__ == "__main__":
                         help="Output directory. Default : outputs")
     parser.add_argument("-e", "--endpoints", default="",
                         help="A list of endpoints to run on. Default: local")
+    parser.add_argument("-t", "--timeout", default=1200,
+                        help="The timeout in seconds to check results after all task submission complete. Default: 1200 seconds")
     args = parser.parse_args()
 
+
+    set_file_logger(f'{args.smile_file.split("-")[0]}.log')
+    logger.info("Start of funcx pipeline")
 
     configs = {'709118de-1103-463f-8425-281eb93b55ff': {'filename': '/projects/CVD_Research/zhuozhao/candle/ScreenPilot/ena+db.can',
                                                         'workdir': '/tmp/zzli/',
@@ -206,6 +239,9 @@ if __name__ == "__main__":
                'f061bf6e-8025-475f-b102-0a3fc242164d': {'filename': '/projects/CVD_Research/zhuozhao/data/',
                                                         'workdir': '/tmp/zzli/',
                                                         'out_path': '/projects/CVD_Research/zhuozhao/data/'},
+               '39b761f2-ff05-4a66-9573-db47f649c8e5': {'filename': '/oasis/projects/nsf/anl117/zhuozhao/data/',
+                                                        'workdir': '/tmp/zhuozhao/',
+                                                        'out_path': '/oasis/projects/nsf/anl117/zhuozhao/data/'},
               }
 
     # Get endpoints
@@ -214,19 +250,22 @@ if __name__ == "__main__":
                  '67e95158-8bda-4b1f-a0ef-31a1626eba00',  # Ryan ep
                  'a59434ad-9a25-4378-9682-b5110e4eaa48',  # Ryan ep Theta queue (5 nodes)
                  ]
-    endpoints = ['62186e94-ed69-423a-92c2-4e743383247e',  # Comet
-                 'f061bf6e-8025-475f-b102-0a3fc242164d',  # Theta CVD_Research
+    endpoints = [# '62186e94-ed69-423a-92c2-4e743383247e',  # Comet
+                 # 'f061bf6e-8025-475f-b102-0a3fc242164d',  # Theta CVD_Research
+                 '39b761f2-ff05-4a66-9573-db47f649c8e5',  # Comet headnode endpoint
                 ]
-    print(f"Submitting tasks to endpoints {endpoints}")
+    logger.info(f"The taget endpoints: {endpoints}")
 
     # Funcx client
     fxc = FuncXClient()
     fxc.throttling_enabled = False
-    print(fxc.base_url, fxc.throttling_enabled)
+    logger.info(f'Base url: {fxc.base_url}')
+    logger.info(f'Throttling enabled: {fxc.throttling_enabled}')
 
     # Batch generator
     batchsize = int(args.batch_size)
     print(f"[Main] Chunksize : {batchsize}")
+    logger.info(f"[Main] Chunksize : {batchsize}")
     batch_generator_uuid = fxc.register_function(generate_batch, description="A funcx function for batch generator")
     res = fxc.run(filename=os.path.join(configs[endpoints[0]]['filename'], args.smile_file),
                   batchsize=batchsize,
@@ -240,6 +279,8 @@ if __name__ == "__main__":
     #                                max_batches=int(args.num_batches))
     # print(f"The batch generator is {batch_generator}")
     print(f"Got the batch generator, in total {len(batch_generator)} batches")
+    logger.info(f"Got the batch generator, in total {len(batch_generator)} batches")
+    logger.debug(f'Batch generator: {batch_generator}')
 
     # Create output directory and check done batch
     create_out_uuid = fxc.register_function(create_output_dir, description="A funcx function for creating output directory")
@@ -253,17 +294,22 @@ if __name__ == "__main__":
         tasks.append(task)
     for task in tasks:
         res = poll_result(task, name='creating output directory')
+    logger.info("Done creating output director on remote endpoints")
+
+    tasks = {}  
     for ep in endpoints:
         out_file_path = os.path.join(configs[ep]["out_path"], args.smile_file.split(".")[0] + '_descriptor')
         task = fxc.run(out_file_path,
                        endpoint_id=ep,
                        function_id=check_done_uuid)
-        tasks.append(task)
+        tasks[ep] = task
     done_batch = set()
-    for task in tasks:
+    for ep, task in tasks.items():
         res = poll_result(task, name="checking done batches")
+        logger.debug(f"Got the done batches for {ep} is {res}")
         done_batch.update(res)
     print(f"The done batches are {done_batch}")
+    logger.debug(f"The done batches are {done_batch}")
 
     # Register funcx function
     funcx_runner_uuid = fxc.register_function(funcx_runner, description="A funcx function for covid19")
@@ -272,13 +318,21 @@ if __name__ == "__main__":
                                             description="A funcx warming function for covid19")
     
     # Submit tasks
+    print("Start submitting tasks to remote endpoint")
+    logger.info("Start submitting tasks to remote endpoint")
     task_ids = do_work(batch_generator, done_batch, batchsize, funcx_runner_uuid, funcx_warm_uuid, endpoints, args.smile_file)
+    print("Finished submission")
+    logger.info("Finished submission")
 
+    print("Start polling for results")
+    logger.info("Start polling for results")
     ids = list(task_ids.keys())
     pending_tasks = set(ids)
-    failed_results = []
-    while len(pending_tasks) > 0:
-         print("[Main] Waiting for {} pending tasks...".format(len(pending_tasks)))
+    failed_results = {}
+    failed_chunks = []
+    start = time.time()
+    while len(pending_tasks) > 0 and time.time() - start < args.timeout:
+         logger.debug("[Main] Waiting for {} pending tasks...".format(len(pending_tasks)))
          results = fxc.get_batch_status(ids)
          for task_id, res in results.items():
             if task_id in pending_tasks:
@@ -286,13 +340,26 @@ if __name__ == "__main__":
                 if res['pending'] == 'False':
                     pending_tasks.remove(task_id)
                     if 'exception' in res:
-                        failed_results.append(res)
-                        print(f"ChUnk {i} failed")
+                        failed_results[i] = res
+                        failed_chunks.append(i)
+                        logger.debug(f"Chunk {i} failed")
                     elif 'result' in res:
-                        print(f"Chunk {i} is done")
+                        logger.debug(f"Chunk {i} is done")
          time.sleep(5)
 
+    print("Got all the results")
+    for task_id in pending_tasks:
+        failed_chunks.append(task_ids[task_id])
+    logger.info(f"The failed chunks: {failed_chunks}")
+    logger.info("Done checking results")
+
+    print("Start checking exception for failed chunks") 
+    logger.info("Start checking exception for failed chunks")
+    for chunk, res in failed_results.items():
+        logger.debug("Raising exception for failed results")
+        try:
+            res['exception'].reraise()
+        except Exception as e:
+            logger.exception(f"Chunk {chunk} have exception")
     print("All done!")
-    for res in failed_results:
-        print("Raising exception for failed results")
-        res['exception'].reraise()
+
