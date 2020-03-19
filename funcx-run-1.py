@@ -70,7 +70,6 @@ def funcx_runner(index,
                  out_file=None):
 
     """funcX function to perform work"""
-    return 1/0
     from candle_apps.candle_node_local import funcx_node_local
     return funcx_node_local(filename, index, batchsize, index_start, index_end,
                             workdir=workdir, out_file=out_file)
@@ -179,7 +178,7 @@ def do_work(batch_index, done_batch, batchsize, func_uuid, funcx_warm, endpoints
             # now try warming the rest of the nodes
             warm_ep(ep, stats, funcx_warm, warm_limit=min(10, len(batch_index)))
         logger.debug("Sleeping until next scheduler round")
-        time.sleep(10)
+        time.sleep(70)
     return task_ids
 
 
@@ -345,7 +344,7 @@ if __name__ == "__main__":
                         logger.debug(f"Chunk {i} failed")
                     elif 'result' in res:
                         logger.debug(f"Chunk {i} is done")
-         time.sleep(5)
+         time.sleep(15)
 
     print("Got all the results")
     for task_id in pending_tasks:
