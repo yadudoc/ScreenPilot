@@ -7,7 +7,7 @@ import os
 import sys
 import logging
 
-def compute_descript(smile, walltime=30, pickle=False):
+def compute_descript(smile, walltime=30, pickle_output=False):
     """
     import random
     import time
@@ -37,7 +37,7 @@ def compute_descript(smile, walltime=30, pickle=False):
 
     data = np.array(descs).flatten().astype(np.float32) #could run in FP16 UNO , something to think about
     # data = descs
-    if pickle:
+    if pickle_output is True:
         return pickle.dumps(data) # We do this to avoid a bug in the serialization routines that Parsl
     else:
         return data
